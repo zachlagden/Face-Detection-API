@@ -15,7 +15,7 @@ The Face Detection API is a simple tool for detecting faces in images, overlayin
 1. Clone the repository:
 
    ```bash
-   git clone https://github.com/whsmith/Face-Detection-API.git
+   git clone https://github.com/thewhsmith/Face-Detection-API.git
    ```
 
 2. Navigate to the project directory:
