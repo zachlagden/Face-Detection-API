@@ -1,0 +1,68 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual environment
+venv/
+env/
+.venv/
+
+# IDE files
+.vscode/
+*.idea/
+
+# Logs
+*.log
+
+# User-specific files
+*.suo
+*.user
+*.sln.docstates
+
+# Output files
+*.pyc
+*.pyo
+__pycache__/
+
+# macOS
+.DS_Store
+
+# Compiled Python files
+*.pyc
+
+# Compiled C extension
+*.so
+
+# Compiled files
+__pycache__/
+*.pyc
+*.pyo
+
+# Jupyter Notebook
+.ipynb_checkpoints/
+
+# Configuration for local development
+config/
+
+# Environment variables file
+.env
+
+# Dependency directories
+bin/
+build/
+include/
+lib/
+lib64/
+libs/
+
+# Project Specific
+
+data/shape_predictor_68_face_landmarks.dat
+data/testimage.jpg
+temp/*.*
+temp/*
+jobs/*.*
+jobs/*
+```
