@@ -39,7 +39,7 @@ The Face Detection API is a simple tool for detecting faces in images, overlayin
 1. Run the Flask application:
 
    ```bash
-   python app.py
+   python main.py
    ```
 
    The API will be accessible at [http://127.0.0.1:5000/](http://127.0.0.1:5000/).

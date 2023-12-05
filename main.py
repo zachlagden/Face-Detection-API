@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, send_file
+from flask import Flask, request, jsonify, send_file, render_template
 import cv2
 import dlib
 import numpy as np
@@ -11,16 +11,11 @@ app = Flask(__name__)
 
 # Load the face detector and shape predictor from Dlib
 detector = dlib.get_frontal_face_detector()
-predictor = dlib.shape_predictor(
-    "Face Detection API/data/shape_predictor_68_face_landmarks.dat"
-)
+predictor = dlib.shape_predictor("data/shape_predictor_68_face_landmarks.dat")
 
-JOBS_FOLDER = "Face Detection API/jobs"
+JOBS_FOLDER = "jobs"
 if not os.path.exists(JOBS_FOLDER):
     os.makedirs(JOBS_FOLDER)
-
-
-import cv2
 
 
 def process_image(image):
@@ -97,6 +92,11 @@ def process_image(image):
         )
 
     return image, result_data
+
+
+@app.route("/", methods=["GET"])
+def index():
+    return render_template("index.html")
 
 
 @app.route("/overlay", methods=["POST"])
