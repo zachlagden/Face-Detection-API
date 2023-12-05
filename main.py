@@ -1,24 +1,51 @@
 from flask import Flask, request, jsonify, send_file, render_template
+from datetime import datetime
 import cv2
 import dlib
 import numpy as np
-import time
 import os
 import uuid
-import json
+import time
+from pymongo import MongoClient
+from gridfs import GridFS
+import io
+from dotenv import load_dotenv
 
+# Load environment variables
+load_dotenv()
+
+# Create Flask app
 app = Flask(__name__)
 
-# Load the face detector and shape predictor from Dlib
+# Connect to MongoDB and create TTL index for jobs collection
+client = MongoClient(os.getenv("mongo_url"))
+db = client[os.getenv("mongo_db")]
+
+# Create TTL index for jobs collection with expiration after one hour
+expire_after = int(os.getenv("mongo_job_expire_after"))
+if expire_after is not 0:
+    db.jobs.create_index("created_at", expireAfterSeconds=expire_after)
+
+# Create GridFS object
+fs = GridFS(db)
+
+# Create face detector and facial landmark predictor
 detector = dlib.get_frontal_face_detector()
 predictor = dlib.shape_predictor("data/shape_predictor_68_face_landmarks.dat")
 
-JOBS_FOLDER = "jobs"
-if not os.path.exists(JOBS_FOLDER):
-    os.makedirs(JOBS_FOLDER)
-
 
 def process_image(image):
+    """
+    Process an image and return the processed image and data
+
+    Args:
+        image (numpy.ndarray): The image to process
+
+    Returns:
+        numpy.ndarray: The processed image
+        list: The processed data
+    """
+
     # Convert the image to grayscale for face detection
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
@@ -96,84 +123,80 @@ def process_image(image):
 
 @app.route("/", methods=["GET"])
 def index():
+    """Render the index.html template"""
     return render_template("index.html")
 
 
 @app.route("/overlay", methods=["POST"])
 def overlay():
+    """Process an image and return the processed image and data"""
     try:
         start_time = time.time()
-
-        # Get the image from the request
         file = request.files["image"]
         image_np = np.frombuffer(file.read(), np.uint8)
         image = cv2.imdecode(image_np, cv2.IMREAD_COLOR)
 
-        # Process the image
         result_image, result_data = process_image(image)
 
-        # Generate a unique identifier for the job
         job_id = str(uuid.uuid4())
-        job_folder = os.path.join(JOBS_FOLDER, job_id)
-        os.makedirs(job_folder)
 
-        # Save the processed image to the job folder
-        result_image_path = os.path.join(job_folder, "result_image.png")
-        cv2.imwrite(result_image_path, result_image)
+        # Convert the result image to bytes
+        _, result_image_bytes = cv2.imencode(".png", result_image)
 
-        # Additional data about the request
+        # Save the processed image to MongoDB GridFS
+        result_image_id = fs.put(
+            result_image_bytes.tobytes(), filename="result_image.png"
+        )
+
         end_time = time.time()
         processing_time = end_time - start_time
-
-        # Format the processing time in milliseconds
         processing_time = f"{processing_time * 1000:.2f} ms"
 
-        # Create the data object to be saved as JSON and returned
-        data = {
-            "job_id": job_id,
-            "result_image_url": f"/jobs/{job_id}/result_image.png",
-            "processing_time": processing_time,
-            "result_data": result_data,
-        }
+        # Insert job data with timestamp
+        db.jobs.insert_one(
+            {
+                "job_id": job_id,
+                "result_image_url": f"/jobs/{job_id}/result_image.png",
+                "result_image_id": result_image_id,
+                "processing_time": processing_time,
+                "result_data": result_data,
+                "created_at": datetime.utcnow(),  # Add timestamp
+            }
+        )
 
-        with open(f"{job_folder}/job.json", "w+") as f:
-            json.dump(data, f)
-
-        return jsonify(data)
+        return jsonify(
+            {
+                "job_id": job_id,
+                "result_image_url": f"/jobs/{job_id}/result_image.png",
+                "processing_time": processing_time,
+                "result_data": result_data,
+            }
+        )
     except Exception as e:
         return jsonify({"error": str(e)})
 
 
 @app.route("/jobs/<job_id>", methods=["GET"])
 def get_job(job_id):
+    """Get a job by its ID"""
     try:
-        # Find the job folder based on the job_id
-        job_folder = os.path.join(JOBS_FOLDER, job_id)
-
-        # Check if the job exists
-        if not os.path.exists(job_folder):
-            return jsonify({"error": "Job not found"}), 404
-
-        # Load the job data
-        with open(f"{job_folder}/job.json", "r") as f:
-            data = json.load(f)
-
-        return jsonify(data)
+        job_data = db.jobs.find_one({"job_id": job_id})
+        del job_data["_id"]
+        del job_data["result_image_id"]
+        return jsonify(job_data)
     except Exception as e:
         return jsonify({"error": str(e)})
 
 
 @app.route("/jobs/<job_id>/result_image.png", methods=["GET"])
 def get_result_image(job_id):
+    """Get the result image of a job by its ID"""
     try:
-        # Construct the absolute path to the result image
-        result_image_path = os.path.join(
-            os.getcwd(), JOBS_FOLDER, job_id, "result_image.png"
-        )
+        result_image_id = db.jobs.find_one({"job_id": job_id})["result_image_id"]
+        result_image = fs.get(result_image_id).read()
 
-        # Use send_file with the absolute path
         return send_file(
-            result_image_path,
+            io.BytesIO(result_image),
             mimetype="image/png",
             as_attachment=True,
             download_name="result_image.png",
@@ -182,5 +205,6 @@ def get_result_image(job_id):
         return jsonify({"error": str(e)})
 
 
+# Run the app if this file is executed
 if __name__ == "__main__":
     app.run(debug=True)
