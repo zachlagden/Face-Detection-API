@@ -56,12 +56,3 @@ include/
 lib/
 lib64/
 libs/
-
-# Project Specific
-
-data/testimage.jpg
-temp/*.*
-temp/*
-jobs/*.*
-jobs/*
-```

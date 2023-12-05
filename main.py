@@ -1,4 +1,6 @@
 from flask import Flask, request, jsonify, send_file, render_template
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 from datetime import datetime
 import cv2
 import dlib
@@ -17,13 +19,34 @@ load_dotenv()
 # Create Flask app
 app = Flask(__name__)
 
+# Create rate limiter
+limiter = Limiter(
+    get_remote_address,
+    app=app,
+    default_limits=["1 per second", "10 per minute", "1000 per day"],
+    storage_uri=os.getenv("mongo_url"),
+)
+
+# Set the key function
+limiter.key_func = lambda: request.remote_addr
+
 # Connect to MongoDB and create TTL index for jobs collection
 client = MongoClient(os.getenv("mongo_url"))
 db = client[os.getenv("mongo_db")]
 
 # Create TTL index for jobs collection with expiration after one hour
 expire_after = int(os.getenv("mongo_job_expire_after"))
-if expire_after is not 0:
+
+# Check if the TTL index exists and has the same expiration time
+existing_index_info = db.jobs.index_information()
+if (
+    "created_at_1" not in existing_index_info
+    or existing_index_info["created_at_1"]["expireAfterSeconds"] != expire_after
+):
+    # If the index doesn't exist or has a different expiration time, delete and recreate it
+    if "created_at_1" in existing_index_info:
+        db.jobs.drop_index("created_at_1")
+
     db.jobs.create_index("created_at", expireAfterSeconds=expire_after)
 
 # Create GridFS object
@@ -122,12 +145,14 @@ def process_image(image):
 
 
 @app.route("/", methods=["GET"])
+@limiter.exempt
 def index():
     """Render the index.html template"""
     return render_template("index.html")
 
 
 @app.route("/overlay", methods=["POST"])
+@limiter.limit("10 per minute", override_defaults=False)
 def overlay():
     """Process an image and return the processed image and data"""
     try:
@@ -177,6 +202,7 @@ def overlay():
 
 
 @app.route("/jobs/<job_id>", methods=["GET"])
+@limiter.exempt
 def get_job(job_id):
     """Get a job by its ID"""
     try:
@@ -189,6 +215,7 @@ def get_job(job_id):
 
 
 @app.route("/jobs/<job_id>/result_image.png", methods=["GET"])
+@limiter.limit("20 per minute")
 def get_result_image(job_id):
     """Get the result image of a job by its ID"""
     try:
