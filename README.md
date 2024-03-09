@@ -87,4 +87,4 @@ The Face Detection API is a simple tool for detecting faces in images, overlayin
 
 ## Conclusion
 
-Enjoy using the Face Detection API! If you have any questions or encounter issues, feel free to reach out to support at [contact@whsmith.me](mailto:contact@whsmith.me?subject=Face%20Detection%20API%20Support).
+Enjoy using the Face Detection API! If you have any questions or encounter issues, feel free to reach out to support at [zach@zachlagden.uk](mailto:zach@zachlagden.uk?subject=Face%20Detection%20API%20Support).
