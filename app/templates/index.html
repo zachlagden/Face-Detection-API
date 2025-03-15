@@ -1,0 +1,897 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Face Detection API</title>
+    <!-- jQuery -->
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <!-- Vue.js -->
+    <script src="https://cdn.jsdelivr.net/npm/vue@2.6.14/dist/vue.js"></script>
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              primary: {
+                DEFAULT: '#4361ee',
+                light: '#6e85f7',
+                dark: '#304bca',
+              },
+              secondary: '#3f37c9',
+              success: '#4cc9f0',
+              danger: '#f72585',
+              warning: '#f8961e',
+              info: '#4895ef',
+            }
+          }
+        }
+      }
+    </script>
+  </head>
+
+  <body class="bg-gray-50 text-gray-800 font-sans">
+    <header class="bg-gradient-to-r from-primary to-secondary text-white py-8 mb-8 shadow-md">
+      <div class="container mx-auto px-4">
+        <div class="flex flex-col md:flex-row justify-between items-center">
+          <h1 class="text-3xl font-bold">Face Detection API</h1>
+          <nav class="flex gap-4 mt-4 md:mt-0">
+            <a href="#demo" class="py-2 px-4 rounded-lg bg-white/30 font-bold transition-all hover:bg-white/20" id="nav-demo">Test API</a>
+            <a href="#jobs" class="py-2 px-4 rounded-lg hover:bg-white/20 transition-all" id="nav-jobs">Browse Jobs</a>
+            <a href="#docs" class="py-2 px-4 rounded-lg hover:bg-white/20 transition-all" id="nav-docs">Documentation</a>
+          </nav>
+        </div>
+      </div>
+    </header>
+
+    <div class="container mx-auto px-4" id="app">
+      <!-- Toast notifications container -->
+      <div class="fixed top-5 right-5 z-50">
+        <div v-for="(toast, index) in toasts" :key="index" 
+          class="min-w-[250px] mb-3 overflow-hidden shadow-lg rounded-lg animate-fade-in-right"
+          :class="{
+            'bg-white border-l-4 border-success': toast.type === 'success',
+            'bg-white border-l-4 border-danger': toast.type === 'error',
+            'bg-white border-l-4 border-warning': toast.type === 'warning',
+            'bg-white border-l-4 border-info': toast.type === 'info'
+          }">
+          <div class="px-4 py-3 flex justify-between items-center" 
+            :class="{
+              'bg-success/10 text-success': toast.type === 'success',
+              'bg-danger/10 text-danger': toast.type === 'error',
+              'bg-warning/10 text-warning': toast.type === 'warning',
+              'bg-info/10 text-info': toast.type === 'info'
+            }">
+            <span class="font-semibold">{{ toast.title }}</span>
+            <span class="cursor-pointer" @click="removeToast(index)">&times;</span>
+          </div>
+          <div class="px-4 py-3">{{ toast.message }}</div>
+        </div>
+      </div>
+      
+      <!-- Job Details Modal -->
+      <div v-if="jobDetailsModal" class="fixed inset-0 bg-gray-800/50 flex justify-center items-center z-40" @click.self="jobDetailsModal = null">
+        <div class="bg-white rounded-lg shadow-xl w-11/12 max-w-3xl max-h-[90vh] overflow-y-auto">
+          <div class="px-5 py-4 border-b flex justify-between items-center">
+            <h3 class="text-xl font-bold">Job Details - {{ jobDetailsModal.job_id }}</h3>
+            <button class="text-2xl text-gray-500 hover:text-danger transition-colors" @click="jobDetailsModal = null">&times;</button>
+          </div>
+          <div class="p-5">
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div>
+                <div class="mb-6">
+                  <label class="block mb-2 font-semibold">Processed Image:</label>
+                  <div class="relative inline-block">
+                    <img :src="jobDetailsModal.result_image_url" class="rounded-lg shadow-md max-w-full" alt="Processed image">
+                    <!-- Facial landmarks visualization -->
+                    <div v-if="jobDetailsModal.result_data">
+                      <div v-for="(face, index) in jobDetailsModal.result_data" :key="index">
+                        <div class="absolute w-2 h-2 rounded-full border border-white bg-red-500/70 transform -translate-x-1/2 -translate-y-1/2"
+                          :style="{left: face.head_xy[0] + 'px', top: face.head_xy[1] + 'px'}"></div>
+                        <div class="absolute w-2 h-2 rounded-full border border-white bg-green-500/70 transform -translate-x-1/2 -translate-y-1/2"
+                          :style="{left: face.left_eye_xy[0] + 'px', top: face.left_eye_xy[1] + 'px'}"></div>
+                        <div class="absolute w-2 h-2 rounded-full border border-white bg-green-500/70 transform -translate-x-1/2 -translate-y-1/2"
+                          :style="{left: face.right_eye_xy[0] + 'px', top: face.right_eye_xy[1] + 'px'}"></div>
+                        <div class="absolute w-2 h-2 rounded-full border border-white bg-blue-500/70 transform -translate-x-1/2 -translate-y-1/2"
+                          :style="{left: face.mouth_xy[0] + 'px', top: face.mouth_xy[1] + 'px'}"></div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div>
+                <div class="mb-6">
+                  <label class="block mb-2 font-semibold">Job Information:</label>
+                  <table class="w-full border-collapse mb-4">
+                    <tr class="border-b">
+                      <th class="bg-gray-100 text-left p-3">Job ID</th>
+                      <td class="p-3">{{ jobDetailsModal.job_id }}</td>
+                    </tr>
+                    <tr class="border-b">
+                      <th class="bg-gray-100 text-left p-3">Processing Time</th>
+                      <td class="p-3">{{ jobDetailsModal.processing_time }}</td>
+                    </tr>
+                    <tr class="border-b">
+                      <th class="bg-gray-100 text-left p-3">Faces Detected</th>
+                      <td class="p-3">{{ jobDetailsModal.result_data ? jobDetailsModal.result_data.length : 0 }}</td>
+                    </tr>
+                    <tr class="border-b">
+                      <th class="bg-gray-100 text-left p-3">Created</th>
+                      <td class="p-3">{{ formatTime(jobDetailsModal.created_at) }}</td>
+                    </tr>
+                  </table>
+                </div>
+                
+                <div class="mb-4">
+                  <label class="block mb-2 font-semibold">Face Detection Data:</label>
+                  <pre class="bg-gray-100 p-4 rounded-lg overflow-x-auto text-sm font-mono border border-gray-200 h-[300px] overflow-y-auto">{{ jobDetailsModal.result_data ? JSON.stringify(jobDetailsModal.result_data, null, 2) : 'No face data available' }}</pre>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="px-5 py-4 border-t flex justify-end gap-3">
+            <button class="px-4 py-2 text-gray-700 bg-gray-200 hover:bg-gray-300 rounded-lg transition-colors" @click="jobDetailsModal = null">Close</button>
+            <a :href="jobDetailsModal.result_image_url" class="px-4 py-2 text-white bg-primary hover:bg-primary-dark rounded-lg transition-colors" download>Download Image</a>
+          </div>
+        </div>
+      </div>
+
+      <!-- Demo Section -->
+      <section id="demo-section">
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
+          <div class="bg-white p-5 rounded-lg shadow-md text-center transition-transform hover:-translate-y-1 hover:shadow-lg">
+            <i class="fas fa-image text-primary-light text-3xl mb-3"></i>
+            <div class="text-4xl font-bold text-primary mb-1">{{ stats.totalJobs || 0 }}</div>
+            <div class="text-gray-500 text-sm uppercase tracking-wide">Total Jobs</div>
+          </div>
+          <div class="bg-white p-5 rounded-lg shadow-md text-center transition-transform hover:-translate-y-1 hover:shadow-lg">
+            <i class="fas fa-user text-primary-light text-3xl mb-3"></i>
+            <div class="text-4xl font-bold text-primary mb-1">{{ stats.totalFaces || 0 }}</div>
+            <div class="text-gray-500 text-sm uppercase tracking-wide">Faces Detected</div>
+          </div>
+          <div class="bg-white p-5 rounded-lg shadow-md text-center transition-transform hover:-translate-y-1 hover:shadow-lg">
+            <i class="fas fa-bolt text-primary-light text-3xl mb-3"></i>
+            <div class="text-4xl font-bold text-primary mb-1">{{ stats.avgProcessingTime || '0 ms' }}</div>
+            <div class="text-gray-500 text-sm uppercase tracking-wide">Avg. Processing Time</div>
+          </div>
+          <div class="bg-white p-5 rounded-lg shadow-md text-center transition-transform hover:-translate-y-1 hover:shadow-lg">
+            <i class="fas fa-clock text-primary-light text-3xl mb-3"></i>
+            <div class="text-4xl font-bold text-primary mb-1">{{ formatTime(Math.floor(Date.now() / 1000)) }}</div>
+            <div class="text-gray-500 text-sm uppercase tracking-wide">Last Updated</div>
+          </div>
+        </div>
+      
+        <div class="bg-white rounded-lg shadow-md mb-8 overflow-hidden">
+          <div class="bg-gray-100 py-4 px-5 border-b border-gray-200 font-bold text-lg">Test the Face Detection API</div>
+          <div class="p-5">
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div>
+                <div class="mb-5">
+                  <label class="block mb-2 font-semibold">Upload an image:</label>
+                  <div 
+                    class="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center cursor-pointer transition-all hover:border-primary hover:bg-gray-50"
+                    :class="{ 'border-success bg-green-50': isDragging }"
+                    @dragover.prevent="onDragOver"
+                    @dragleave.prevent="onDragLeave"
+                    @drop.prevent="onDrop"
+                    @click="triggerFileInput"
+                  >
+                    <span v-if="!selectedFile">
+                      <i class="fas fa-upload text-3xl block mb-3 text-gray-400"></i>
+                      Drop an image here or click to upload
+                    </span>
+                    <span v-else>
+                      <i class="fas fa-file-image text-3xl block mb-3 text-primary"></i>
+                      {{ selectedFile.name }}
+                    </span>
+                    <input 
+                      type="file" 
+                      class="hidden" 
+                      ref="fileInput"
+                      @change="onFileSelected"
+                      accept="image/*"
+                    >
+                  </div>
+                </div>
+                
+                <div v-if="selectedFile" class="mb-5 text-center">
+                  <button class="bg-primary hover:bg-primary-dark text-white font-bold py-2 px-4 rounded-lg transition-colors mr-2" @click="processImage">
+                    <i class="fas fa-cogs mr-2"></i> Process Image
+                  </button>
+                  <button class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg transition-colors" @click="resetForm">
+                    <i class="fas fa-undo mr-2"></i> Reset
+                  </button>
+                </div>
+                
+                <div v-if="originalPreview" class="mb-5">
+                  <label class="block mb-2 font-semibold">Original Image:</label>
+                  <img :src="originalPreview" class="rounded-lg shadow-md max-w-full" alt="Original image">
+                </div>
+              </div>
+              
+              <div>
+                <div v-if="isLoading" class="flex flex-col items-center justify-center p-8">
+                  <div class="w-8 h-8 border-4 border-gray-200 border-t-primary rounded-full animate-spin"></div>
+                  <p class="mt-4">Processing image...</p>
+                </div>
+                
+                <div v-if="result">
+                  <div class="mb-5">
+                    <label class="block mb-2 font-semibold">Processed Image:</label>
+                    <div class="relative">
+                      <img :src="processedImageUrl" class="rounded-lg shadow-md max-w-full" alt="Processed image">
+                    </div>
+                  </div>
+                  
+                  <div class="mb-5">
+                    <div class="bg-gray-100 p-3 mb-2 rounded-t-lg font-semibold">Detection Results</div>
+                    <div class="mb-3 p-3 border-b border-gray-200">
+                      <span class="font-semibold">Faces Detected:</span> 
+                      <span class="bg-primary text-white text-xs px-2 py-1 rounded-full ml-2">{{ result.result_data.length }}</span>
+                    </div>
+                    <div class="mb-3 p-3 border-b border-gray-200">
+                      <span class="font-semibold">Processing Time:</span> 
+                      <span class="bg-success text-white text-xs px-2 py-1 rounded-full ml-2">{{ result.processing_time }}</span>
+                    </div>
+                    <div class="p-3">
+                      <span class="font-semibold">Job ID:</span> 
+                      <code class="bg-gray-100 px-2 py-1 rounded text-sm font-mono">{{ result.job_id }}</code>
+                    </div>
+                  </div>
+                  
+                  <div class="mb-5">
+                    <label class="block mb-2 font-semibold">Response Data:</label>
+                    <pre class="bg-gray-100 p-4 rounded-lg overflow-x-auto text-sm font-mono border border-gray-200 h-[300px] overflow-y-auto">{{ prettyJson }}</pre>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Jobs Section -->
+      <section id="jobs-section" class="hidden">
+        <div class="bg-white rounded-lg shadow-md mb-8 overflow-hidden">
+          <div class="bg-gray-100 py-4 px-5 border-b border-gray-200 flex justify-between items-center">
+            <span class="font-bold text-lg">Browse Processed Jobs</span>
+            <button class="bg-primary hover:bg-primary-dark text-white text-sm py-1 px-3 rounded-lg transition-colors" @click="refreshJobs">
+              <i class="fas fa-sync-alt mr-1"></i> Refresh
+            </button>
+          </div>
+          <div class="p-5">
+            <div class="flex mb-5">
+              <input 
+                type="text" 
+                class="flex-1 px-4 py-2 border border-gray-300 rounded-l-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent" 
+                placeholder="Search by job ID..." 
+                v-model="jobSearchQuery"
+                @keyup.enter="searchJobs"
+              >
+              <button 
+                class="bg-primary hover:bg-primary-dark text-white px-4 py-2 rounded-r-lg transition-colors"
+                @click="searchJobs"
+              >
+                <i class="fas fa-search"></i>
+              </button>
+            </div>
+            
+            <div v-if="isLoadingJobs" class="flex flex-col items-center justify-center p-8">
+              <div class="w-8 h-8 border-4 border-gray-200 border-t-primary rounded-full animate-spin"></div>
+              <p class="mt-4">Loading jobs...</p>
+            </div>
+            
+            <div v-else-if="jobs.length === 0" class="text-center py-10">
+              <div class="text-gray-300 text-6xl mb-5">
+                <i class="fas fa-images"></i>
+              </div>
+              <div class="text-xl text-gray-500 mb-8">No processed jobs found.</div>
+              <button class="bg-primary hover:bg-primary-dark text-white font-bold py-2 px-4 rounded-lg transition-colors" @click="goToDemo">Process an image</button>
+            </div>
+            
+            <div v-else>
+              <div class="overflow-x-auto">
+                <table class="w-full border-collapse">
+                  <thead>
+                    <tr class="bg-gray-100">
+                      <th class="text-left p-3 border-b">Job ID</th>
+                      <th class="text-left p-3 border-b">Faces</th>
+                      <th class="text-left p-3 border-b">Processing Time</th>
+                      <th class="text-left p-3 border-b">Created</th>
+                      <th class="text-left p-3 border-b">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="job in jobs" :key="job.job_id" class="hover:bg-gray-50 border-b">
+                      <td class="p-3"><code class="text-sm font-mono">{{ job.job_id.substring(0, 8) }}...</code></td>
+                      <td class="p-3">
+                        <span class="bg-primary text-white text-xs px-2 py-1 rounded-full">{{ job.face_count }}</span>
+                      </td>
+                      <td class="p-3">{{ job.processing_time }}</td>
+                      <td class="p-3"><span class="text-gray-500 text-sm">{{ formatTime(job.created_at) }}</span></td>
+                      <td class="p-3">
+                        <div class="flex gap-3">
+                          <i class="fas fa-eye text-gray-500 hover:text-info cursor-pointer transition-colors" @click="viewJobDetails(job.job_id)" title="View details"></i>
+                          <a :href="job.result_image_url" download>
+                            <i class="fas fa-download text-gray-500 hover:text-primary cursor-pointer transition-colors" title="Download image"></i>
+                          </a>
+                        </div>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              
+              <!-- Pagination -->
+              <div v-if="pagination.total_pages > 1" class="flex justify-center mt-6">
+                <ul class="flex">
+                  <li>
+                    <a href="#" 
+                      class="flex items-center justify-center px-3 py-2 mx-1 rounded-md border"
+                      :class="pagination.page === 1 ? 'text-gray-400 bg-gray-100 cursor-default' : 'text-primary hover:bg-gray-100 border-primary'"
+                      @click.prevent="pagination.page > 1 && changePage(pagination.page - 1)"
+                    >
+                      <i class="fas fa-chevron-left"></i>
+                    </a>
+                  </li>
+                  
+                  <li v-for="page in paginationPages" :key="page">
+                    <a href="#" 
+                      class="flex items-center justify-center w-10 h-10 mx-1 rounded-md border"
+                      :class="page === pagination.page ? 'bg-primary text-white border-primary' : 'text-primary hover:bg-gray-100 border-primary'"
+                      @click.prevent="changePage(page)"
+                    >
+                      {{ page }}
+                    </a>
+                  </li>
+                  
+                  <li>
+                    <a href="#" 
+                      class="flex items-center justify-center px-3 py-2 mx-1 rounded-md border"
+                      :class="pagination.page === pagination.total_pages ? 'text-gray-400 bg-gray-100 cursor-default' : 'text-primary hover:bg-gray-100 border-primary'"
+                      @click.prevent="pagination.page < pagination.total_pages && changePage(pagination.page + 1)"
+                    >
+                      <i class="fas fa-chevron-right"></i>
+                    </a>
+                  </li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Documentation Section -->
+      <section id="docs-section" class="hidden">
+        <div class="bg-white rounded-lg shadow-md mb-8 overflow-hidden">
+          <div class="bg-gray-100 py-4 px-5 border-b border-gray-200 font-bold text-lg">API Documentation</div>
+          <div class="p-5">
+            <h2 class="text-2xl font-bold mb-3">Introduction</h2>
+            <p class="mb-6">
+              This API is designed to detect faces in images, extract facial landmarks, 
+              and provide additional information about the detected features.
+            </p>
+
+            <h2 class="text-2xl font-bold mb-3">Endpoints</h2>
+            
+            <h3 id="overlay" class="text-xl font-semibold mb-2">Overlay</h3>
+            <p class="font-bold">POST /overlay</p>
+            <p class="mb-3">
+              This endpoint processes an image to detect faces, overlay facial
+              landmarks, and provide additional data.
+            </p>
+            <p class="font-bold">Request Parameters:</p>
+            <ul class="mb-3 list-disc ml-5">
+              <li>
+                <code class="bg-gray-100 px-2 py-1 rounded text-sm font-mono">image</code>: A file parameter containing the image to be
+                processed.
+              </li>
+            </ul>
+            <p class="font-bold">Response:</p>
+            <pre class="bg-gray-100 p-4 rounded-lg overflow-x-auto mb-6 text-sm font-mono border border-gray-200">{
+    "job_id": "unique_job_id",
+    "result_image_url": "/jobs/unique_job_id/result_image.png",
+    "processing_time": "42.56 ms",
+    "result_data": [
+        {
+            "head_xy": [x, y],
+            "mouth_xy": [x, y],
+            "left_eye_xy": [x, y],
+            "right_eye_xy": [x, y]
+        },
+        // Additional entries for multiple faces if present
+    ]
+}</pre>
+
+            <h3 id="get-job" class="text-xl font-semibold mb-2 mt-6">Get Job</h3>
+            <p class="font-bold">GET /jobs/&lt;job_id&gt;</p>
+            <p class="mb-3">
+              This endpoint retrieves information about a specific job based on its
+              unique identifier.
+            </p>
+            <p class="font-bold">Response:</p>
+            <pre class="bg-gray-100 p-4 rounded-lg overflow-x-auto mb-6 text-sm font-mono border border-gray-200">{
+    "job_id": "unique_job_id",
+    "result_image_url": "/jobs/unique_job_id/result_image.png",
+    "processing_time": "42.56 ms",
+    "result_data": [
+        {
+            "head_xy": [x, y],
+            "mouth_xy": [x, y],
+            "left_eye_xy": [x, y],
+            "right_eye_xy": [x, y]
+        },
+        // Additional entries for multiple faces if present
+    ]
+}</pre>
+
+            <h3 id="get-result-image" class="text-xl font-semibold mb-2 mt-6">Get Result Image</h3>
+            <p class="font-bold">GET /jobs/&lt;job_id&gt;/result_image.png</p>
+            <p class="mb-3">
+              This endpoint retrieves the processed image associated with a specific
+              job.
+            </p>
+            
+            <h3 id="api-jobs" class="text-xl font-semibold mb-2 mt-6">List Jobs</h3>
+            <p class="font-bold">GET /api/jobs</p>
+            <p class="mb-3">
+              This endpoint retrieves a list of recently processed jobs with pagination.
+            </p>
+            <p class="font-bold">Query Parameters:</p>
+            <ul class="mb-3 list-disc ml-5">
+              <li><code class="bg-gray-100 px-2 py-1 rounded text-sm font-mono">page</code>: Page number (default: 1)</li>
+              <li><code class="bg-gray-100 px-2 py-1 rounded text-sm font-mono">limit</code>: Number of jobs per page (default: 10)</li>
+            </ul>
+            <p class="font-bold">Response:</p>
+            <pre class="bg-gray-100 p-4 rounded-lg overflow-x-auto mb-6 text-sm font-mono border border-gray-200">{
+    "jobs": [
+        {
+            "job_id": "unique_job_id",
+            "result_image_url": "/jobs/unique_job_id/result_image.png",
+            "processing_time": "42.56 ms",
+            "face_count": 2,
+            "created_at": 1647334567
+        },
+        // Additional jobs...
+    ],
+    "pagination": {
+        "page": 1,
+        "limit": 10,
+        "total_jobs": 25,
+        "total_pages": 3
+    }
+}</pre>
+
+            <h2 class="text-2xl font-bold mb-3 mt-6">Request and Response Formats</h2>
+
+            <h3 id="overlay-endpoint" class="text-xl font-semibold mb-2">Overlay Endpoint</h3>
+            <p class="font-bold">Request Format:</p>
+            <pre class="bg-gray-100 p-4 rounded-lg overflow-x-auto mb-3 text-sm font-mono border border-gray-200">POST /overlay
+Content-Type: multipart/form-data
+
+&lt;image file&gt;</pre>
+
+            <p class="font-bold mt-4">Response Format:</p>
+            <pre class="bg-gray-100 p-4 rounded-lg overflow-x-auto mb-6 text-sm font-mono border border-gray-200">{
+    "job_id": "unique_job_id",
+    "result_image_url": "/jobs/unique_job_id/result_image.png",
+    "processing_time": "42.56 ms",
+    "result_data": [
+        {
+            "head_xy": [x, y],
+            "mouth_xy": [x, y],
+            "left_eye_xy": [x, y],
+            "right_eye_xy": [x, y]
+        },
+        // Additional entries for multiple faces if present
+    ]
+}</pre>
+
+            <h3 id="get-job-endpoint" class="text-xl font-semibold mb-2 mt-6">Get Job Endpoint</h3>
+            <p class="font-bold">Response Format:</p>
+            <pre class="bg-gray-100 p-4 rounded-lg overflow-x-auto mb-6 text-sm font-mono border border-gray-200">{
+    "job_id": "unique_job_id",
+    "result_image_url": "/jobs/unique_job_id/result_image.png",
+    "processing_time": "42.56 ms",
+    "result_data": [
+        {
+            "head_xy": [x, y],
+            "mouth_xy": [x, y],
+            "left_eye_xy": [x, y],
+            "right_eye_xy": [x, y]
+        },
+        // Additional entries for multiple faces if present
+    ]
+}</pre>
+
+            <h3 id="get-result-image-endpoint" class="text-xl font-semibold mb-2 mt-6">Get Result Image Endpoint</h3>
+            <p class="font-bold">Response Format:</p>
+            <p>The response is the processed image in PNG format.</p>
+
+            <h2 class="text-2xl font-bold mb-3 mt-6">Conclusion</h2>
+            <p>
+              Thank you for using the Face Detection API. If you have any questions or
+              encounter issues, please open an issue on the project repository.
+            </p>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <script>
+      // Vue application
+      new Vue({
+        el: '#app',
+        data: {
+          selectedFile: null,
+          originalPreview: null,
+          result: null,
+          isLoading: false,
+          isDragging: false,
+          apiUrl: window.location.origin,
+          
+          // Jobs section data
+          jobs: [],
+          isLoadingJobs: false,
+          pagination: {
+            page: 1,
+            limit: 10,
+            total_jobs: 0,
+            total_pages: 1
+          },
+          jobSearchQuery: "",
+          
+          // Job details modal
+          jobDetailsModal: null,
+          
+          // Toast notifications
+          toasts: [],
+          
+          // Statistics
+          stats: {
+            totalJobs: 0,
+            totalFaces: 0,
+            avgProcessingTime: '0 ms'
+          }
+        },
+        computed: {
+          processedImageUrl() {
+            if (!this.result) return null;
+            return `${this.apiUrl}${this.result.result_image_url}`;
+          },
+          prettyJson() {
+            if (!this.result) return '';
+            return JSON.stringify(this.result, null, 2);
+          },
+          paginationPages() {
+            const totalPages = this.pagination.total_pages;
+            const currentPage = this.pagination.page;
+            
+            // Calculate range of pages to display
+            const maxPagesToShow = 5;
+            let startPage = Math.max(1, currentPage - Math.floor(maxPagesToShow / 2));
+            let endPage = Math.min(totalPages, startPage + maxPagesToShow - 1);
+            
+            // Adjust start page if we're at the end
+            if (endPage === totalPages) {
+              startPage = Math.max(1, endPage - maxPagesToShow + 1);
+            }
+            
+            // Generate page array
+            return Array.from({ length: (endPage - startPage + 1) }, (_, i) => startPage + i);
+          }
+        },
+        methods: {
+          triggerFileInput() {
+            this.$refs.fileInput.click();
+          },
+          onFileSelected(event) {
+            const file = event.target.files[0];
+            if (file) {
+              this.selectedFile = file;
+              this.createPreview(file);
+            }
+          },
+          onDragOver(event) {
+            this.isDragging = true;
+          },
+          onDragLeave(event) {
+            this.isDragging = false;
+          },
+          onDrop(event) {
+            this.isDragging = false;
+            const file = event.dataTransfer.files[0];
+            if (file && file.type.match('image.*')) {
+              this.selectedFile = file;
+              this.createPreview(file);
+            }
+          },
+          createPreview(file) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+              this.originalPreview = e.target.result;
+            };
+            reader.readAsDataURL(file);
+          },
+          processImage() {
+            if (!this.selectedFile) return;
+            
+            this.isLoading = true;
+            this.result = null;
+            
+            const formData = new FormData();
+            formData.append('image', this.selectedFile);
+            
+            fetch(`${this.apiUrl}/overlay`, {
+              method: 'POST',
+              body: formData
+            })
+            .then(response => {
+              if (!response.ok) {
+                throw new Error('Error processing image');
+              }
+              return response.json();
+            })
+            .then(data => {
+              this.result = data;
+              this.isLoading = false;
+              this.addToast('success', 'Success!', 'Image processed successfully');
+              this.loadStats(); // Refresh statistics after processing
+            })
+            .catch(error => {
+              console.error('Error processing image:', error);
+              this.isLoading = false;
+              this.addToast('error', 'Error', 'Failed to process image. Please try again.');
+            });
+          },
+          resetForm() {
+            this.selectedFile = null;
+            this.originalPreview = null;
+            this.result = null;
+            this.$refs.fileInput.value = null;
+          },
+          loadJobs(page = 1) {
+            this.isLoadingJobs = true;
+            
+            fetch(`${this.apiUrl}/api/jobs?page=${page}&limit=${this.pagination.limit}`)
+              .then(response => {
+                if (!response.ok) {
+                  throw new Error('Failed to load jobs');
+                }
+                return response.json();
+              })
+              .then(data => {
+                this.jobs = data.jobs;
+                this.pagination = data.pagination;
+                this.isLoadingJobs = false;
+              })
+              .catch(error => {
+                console.error('Error loading jobs:', error);
+                this.isLoadingJobs = false;
+                this.addToast('error', 'Error', 'Failed to load jobs');
+                // Set empty jobs on error
+                this.jobs = [];
+                this.pagination = {
+                  page: 1,
+                  limit: 10,
+                  total_jobs: 0,
+                  total_pages: 1
+                };
+              });
+          },
+          changePage(page) {
+            if (page < 1 || page > this.pagination.total_pages) return;
+            this.loadJobs(page);
+          },
+          refreshJobs() {
+            this.loadJobs(this.pagination.page);
+            this.addToast('info', 'Refreshed', 'Job list has been refreshed');
+          },
+          searchJobs() {
+            if (!this.jobSearchQuery.trim()) {
+              this.loadJobs(1);
+              return;
+            }
+            
+            // For simplicity, we'll just filter client-side
+            // In a real application, you would implement server-side search
+            this.isLoadingJobs = true;
+            
+            fetch(`${this.apiUrl}/api/jobs?page=1&limit=100`)
+              .then(response => response.json())
+              .then(data => {
+                const filteredJobs = data.jobs.filter(job => 
+                  job.job_id.toLowerCase().includes(this.jobSearchQuery.toLowerCase())
+                );
+                
+                this.jobs = filteredJobs;
+                this.pagination = {
+                  page: 1,
+                  limit: filteredJobs.length,
+                  total_jobs: filteredJobs.length,
+                  total_pages: 1
+                };
+                
+                this.isLoadingJobs = false;
+              })
+              .catch(error => {
+                console.error('Error searching jobs:', error);
+                this.isLoadingJobs = false;
+                this.addToast('error', 'Error', 'Search failed');
+              });
+          },
+          viewJobDetails(jobId) {
+            fetch(`${this.apiUrl}/jobs/${jobId}`)
+              .then(response => {
+                if (!response.ok) {
+                  throw new Error('Job not found');
+                }
+                return response.json();
+              })
+              .then(data => {
+                this.jobDetailsModal = data;
+              })
+              .catch(error => {
+                console.error('Error loading job details:', error);
+                this.addToast('error', 'Error', 'Failed to load job details');
+              });
+          },
+          goToDemo() {
+            $('#nav-demo').click();
+          },
+          addToast(type, title, message) {
+            const toast = { type, title, message };
+            this.toasts.push(toast);
+            
+            // Auto-remove toast after 5 seconds
+            setTimeout(() => {
+              this.removeToast(this.toasts.indexOf(toast));
+            }, 5000);
+          },
+          removeToast(index) {
+            if (index > -1) {
+              this.toasts.splice(index, 1);
+            }
+          },
+          formatTime(timestamp) {
+            if (!timestamp) return '';
+            
+            const date = new Date(timestamp * 1000);
+            const now = new Date();
+            const diffMs = now - date;
+            const diffSec = Math.floor(diffMs / 1000);
+            const diffMin = Math.floor(diffSec / 60);
+            const diffHour = Math.floor(diffMin / 60);
+            const diffDay = Math.floor(diffHour / 24);
+            
+            if (diffSec < 60) {
+              return 'just now';
+            } else if (diffMin < 60) {
+              return `${diffMin} minute${diffMin > 1 ? 's' : ''} ago`;
+            } else if (diffHour < 24) {
+              return `${diffHour} hour${diffHour > 1 ? 's' : ''} ago`;
+            } else if (diffDay < 7) {
+              return `${diffDay} day${diffDay > 1 ? 's' : ''} ago`;
+            } else {
+              return date.toLocaleDateString() + ' at ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            }
+          },
+          loadStats() {
+            // In a real app, you would fetch this from a stats endpoint
+            // Handle the case where the API is not available
+            fetch(`${this.apiUrl}/api/jobs?page=1&limit=100`)
+              .then(response => {
+                if (!response.ok) {
+                  // If API not available, just use empty data
+                  return { jobs: [], pagination: { total_jobs: 0 } };
+                }
+                return response.json();
+              })
+              .then(data => {
+                const jobs = data.jobs || [];
+                const totalJobs = data.pagination ? data.pagination.total_jobs : 0;
+                
+                let totalFaces = 0;
+                let totalProcessingTime = 0;
+                
+                jobs.forEach(job => {
+                  totalFaces += job.face_count || 0;
+                  // Convert ms string to number
+                  const timeStr = (job.processing_time || '0 ms').replace(' ms', '');
+                  totalProcessingTime += parseFloat(timeStr);
+                });
+                
+                const avgTime = jobs.length > 0 ? 
+                  (totalProcessingTime / jobs.length).toFixed(2) + ' ms' : 
+                  '0 ms';
+                
+                this.stats = {
+                  totalJobs,
+                  totalFaces,
+                  avgProcessingTime: avgTime
+                };
+              })
+              .catch(error => {
+                console.error('Error loading stats:', error);
+                // Use default values on error
+                this.stats = {
+                  totalJobs: 0,
+                  totalFaces: 0,
+                  avgProcessingTime: '0 ms'
+                };
+              });
+          }
+        },
+        mounted() {
+          // Load jobs on mount
+          this.loadJobs();
+          
+          // Load statistics
+          this.loadStats();
+          
+          // Set up auto-refresh for stats every 60 seconds
+          setInterval(() => {
+            this.loadStats();
+          }, 60000);
+        }
+      });
+      
+      // Navigation
+      $(document).ready(function() {
+        // Handle navigation
+        $('#nav-demo').click(function(e) {
+          e.preventDefault();
+          $('#demo-section').removeClass('hidden');
+          $('#jobs-section').addClass('hidden');
+          $('#docs-section').addClass('hidden');
+          $('#nav-demo').addClass('bg-white/30 font-bold');
+          $('#nav-jobs').removeClass('bg-white/30 font-bold');
+          $('#nav-docs').removeClass('bg-white/30 font-bold');
+        });
+        
+        $('#nav-jobs').click(function(e) {
+          e.preventDefault();
+          $('#demo-section').addClass('hidden');
+          $('#jobs-section').removeClass('hidden');
+          $('#docs-section').addClass('hidden');
+          $('#nav-demo').removeClass('bg-white/30 font-bold');
+          $('#nav-jobs').addClass('bg-white/30 font-bold');
+          $('#nav-docs').removeClass('bg-white/30 font-bold');
+        });
+        
+        $('#nav-docs').click(function(e) {
+          e.preventDefault();
+          $('#demo-section').addClass('hidden');
+          $('#jobs-section').addClass('hidden');
+          $('#docs-section').removeClass('hidden');
+          $('#nav-demo').removeClass('bg-white/30 font-bold');
+          $('#nav-jobs').removeClass('bg-white/30 font-bold');
+          $('#nav-docs').addClass('bg-white/30 font-bold');
+        });
+      });
+      
+      // Add keyframe animation for toasts
+      document.head.insertAdjacentHTML('beforeend', `
+        <style>
+          @keyframes fade-in-right {
+            from {
+              transform: translateX(100%);
+              opacity: 0;
+            }
+            to {
+              transform: translateX(0);
+              opacity: 1;
+            }
+          }
+          .animate-fade-in-right {
+            animation: fade-in-right 0.3s ease-in-out;
+          }
+        </style>
+      `);
+    </script>
+  </body>
+</html>
