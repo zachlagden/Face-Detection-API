@@ -2,29 +2,49 @@
 
 The Face Detection API is a simple tool for detecting faces in images, overlaying facial landmarks, and providing additional data about the detected features.
 
+## Features
+
+- Face detection in uploaded images
+- Facial landmark extraction
+- Visual overlays for facial features
+- API endpoints for image processing and result retrieval
+- Job-based processing with results storage
+
 ## Installation and Setup
 
 ### Prerequisites
 
-- Python 3.6 or higher
-- Pip (Python package installer)
-- Visual Studio Build Tools (required for dlib)
+- Python 3.8 or higher
+- Visual Studio Build Tools with C++ components (for dlib)
+- CMake (for dlib)
+
+> **Note for Windows users**: See [WINDOWS_INSTALL.md](WINDOWS_INSTALL.md) for detailed Windows-specific installation instructions.
 
 ### Installation Steps
 
 1. Clone the repository:
 
    ```bash
-   git clone https://github.com/thewhsmith/Face-Detection-API.git
+   git clone https://github.com/yourusername/face-detection-api.git
    ```
 
 2. Navigate to the project directory:
 
    ```bash
-   cd Face-Detection-API
+   cd face-detection-api
    ```
 
-3. Install Visual Studio Build Tools from [Visual Studio Downloads](https://visualstudio.microsoft.com/visual-cpp-build-tools/).
+3. Create a virtual environment and activate it:
+
+   ```bash
+   python -m venv venv
+   
+   # On Windows
+   venv\Scripts\activate
+   
+   # On macOS/Linux
+   source venv/bin/activate
+   ```
 
 4. Install the required Python packages:
 
@@ -32,7 +52,17 @@ The Face Detection API is a simple tool for detecting faces in images, overlayin
    pip install -r requirements.txt
    ```
 
-5. Download the shape predictor file from [Dlib's official website](http://dlib.net/files/shape_predictor_68_face_landmarks.dat.bz2) and place it in the `data/` folder.
+5. Download the shape predictor file:
+
+   Download the shape predictor file from [Dlib's official website](http://dlib.net/files/shape_predictor_68_face_landmarks.dat.bz2), extract it, and place it in the `data/` folder.
+
+6. Create a `.env` file:
+
+   Copy the example environment file and modify as needed:
+
+   ```bash
+   cp .env.example .env
+   ```
 
 ## Basic Usage
 
@@ -62,7 +92,7 @@ The Face Detection API is a simple tool for detecting faces in images, overlayin
 3. Retrieve information about a specific job:
 
    - **Endpoint:** `GET /jobs/<job_id>`
-   - \*\*Replace `<job_id>` with the actual job ID obtained from the overlay response.
+   - **Replace `<job_id>` with the actual job ID obtained from the overlay response.
 
    **Example using cURL:**
 
@@ -75,7 +105,7 @@ The Face Detection API is a simple tool for detecting faces in images, overlayin
 4. Retrieve the processed image associated with a job:
 
    - **Endpoint:** `GET /jobs/<job_id>/result_image.png`
-   - \*\*Replace `<job_id>` with the actual job ID obtained from the overlay response.
+   - **Replace `<job_id>` with the actual job ID obtained from the overlay response.
 
    **Example using cURL:**
 
@@ -85,6 +115,42 @@ The Face Detection API is a simple tool for detecting faces in images, overlayin
 
    This will download the processed image.
 
-## Conclusion
+## Project Structure
 
-Enjoy using the Face Detection API! If you have any questions or encounter issues, feel free to reach out to support at [zach@zachlagden.uk](mailto:zach@zachlagden.uk?subject=Face%20Detection%20API%20Support).
+- `app/`: Main application package
+  - `helpers/`: Helper modules and functions
+    - `database.py`: Database operations (SQLite)
+    - `image_processor.py`: Face detection and image processing
+  - `templates/`: HTML templates
+    - `index.html`: API documentation page
+- `data/`: Shape predictor data file and SQLite database
+  - `images/`: Storage for processed images
+- `tests/`: Test suite
+  - `test_image_processor.py`: Tests for image processing
+  - `test_routes.py`: Tests for API endpoints
+- `main.py`: Application entry point
+- `config.py`: Configuration settings
+- `.env.example`: Example environment variables
+
+## Running Tests
+
+This project includes a test suite using pytest. To run the tests:
+
+```bash
+pytest
+```
+
+## Rate Limiting
+
+The API implements rate limiting to prevent abuse:
+- 1 request per second (default)
+- 10 requests per minute (default)
+- 1000 requests per day (default)
+
+These limits can be configured in the application.
+
+## Data Storage
+
+- SQLite database for storing job information
+- Local file system for storing processed images
+- Automatic cleanup of expired jobs and images
